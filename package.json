@@ -1,7 +1,7 @@
 {
-  "name": "hub-central",
+  "name": "nous",
   "version": "1.0.0",
-  "description": "Hub central de eventos para el ecosistema ERP Humanizar",
+  "description": "Nous — orquestador central de eventos para el ecosistema Prizma",
   "main": "dist/index.js",
   "scripts": {
     "build": "nest build",
@@ -17,7 +17,6 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
-    "@olympo/contracts": "file:../../packages/contracts",
     "@nestjs/axios": "^3.0.1",
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^3.1.1",
@@ -34,6 +33,8 @@
     "ioredis": "^5.3.2",
     "joi": "^17.11.0",
     "moment": "^2.29.4",
+    "prizma-contracts": "^1.3.0",
+    "prizma-payments": "^1.0.1",
     "pg": "^8.16.3",
     "redis": "^4.6.10",
     "reflect-metadata": "^0.1.13",

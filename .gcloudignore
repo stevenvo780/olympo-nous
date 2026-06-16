@@ -1,0 +1,11 @@
+.gcloudignore
+.git
+.gitignore
+node_modules
+dist
+vendor-contracts/node_modules
+!vendor-contracts/dist
+postman
+README.md
+docker-compose.yml
+*.log

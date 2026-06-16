@@ -3,8 +3,9 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first for better layer caching
+# Copy package files and local dependency first for better layer caching
 COPY package*.json ./
+COPY vendor-contracts ./vendor-contracts
 
 # Install all dependencies (including dev dependencies needed for build)
 RUN npm ci
@@ -20,8 +21,9 @@ FROM node:18-alpine AS production
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and local dependency
 COPY package*.json ./
+COPY vendor-contracts ./vendor-contracts
 
 # Install only production dependencies
 RUN npm ci --omit=dev && npm cache clean --force
@@ -45,4 +47,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3007/health || exit 1
 
 # Start the application
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
