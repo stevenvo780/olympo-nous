@@ -2,9 +2,11 @@ import { BadRequestException, Injectable, Logger } from "@nestjs/common";
 import {
   EventEnvelopeSchema,
   validateEvent,
+  verifyRawBody,
+  verifyEnvelope,
   verifySignature,
   type EventEnvelope,
-} from "@olympo/contracts";
+} from "prizma-contracts";
 import { QueueService } from "./queue.service";
 
 export interface IngestResult {
@@ -18,12 +20,13 @@ export interface IngestResult {
 
 /**
  * EventProcessorService — inbound pipeline for canonical events arriving at
- * `POST /webhooks/hubcentral`.
+ * `POST /webhooks/nous`.
  *
  * Steps (ARCHITECTURE.md §4 envelope contract):
- *   1. Parse + structurally validate the EventEnvelope (Zod).
- *   2. Verify the HMAC-SHA256 signature with `verifySignature` IF a hub secret is
- *      configured (header `x-cauce-signature`, falling back to envelope.signature).
+ *   1. Verify the HMAC-SHA256 signature on the RAW body BEFORE parsing
+ *      (`verifyRawBody` on raw bytes, header `x-prizma-signature`).
+ *      This ensures Zod's .default() fields don't break the signature later.
+ *   2. Parse + structurally validate the EventEnvelope (Zod) on verified bytes.
  *   3. Validate the event-specific payload with `validateEvent`.
  *   4. Idempotency: dedupe by idempotencyKey (Redis), so a re-delivered event is
  *      accepted but not re-enqueued.
@@ -33,43 +36,94 @@ export interface IngestResult {
 export class EventProcessorService {
   private readonly logger = new Logger(EventProcessorService.name);
   private readonly secret =
-    process.env.CAUCE_HUB_SECRET || process.env.HUB_CENTRAL_SECRET || undefined;
+    process.env.PRIZMA_NOUS_SECRET ||
+    process.env.PRIZMA_HUB_SECRET ||
+    process.env.HUB_CENTRAL_SECRET ||
+    process.env.NOUS_SECRET ||
+    process.env.NOUS_HUB_SECRET ||
+    process.env.CAUCE_HUB_SECRET ||
+    undefined;
 
   constructor(private readonly queueService: QueueService) {}
 
   /**
-   * Ingest a raw envelope from the hubcentral webhook. Returns an IngestResult.
+   * Ingest a raw envelope from the nous webhook. Returns an IngestResult.
    * Throws BadRequestException on malformed envelope / bad signature / invalid
    * payload (the controller maps that to a 400).
+   *
+   * CRITICAL ORDER: verify(rawBody) → parse(json) → defaults safe
+   *   1. Verify the raw body's signature BEFORE parsing, so Zod's .default()
+   *      fields don't break the HMAC (different serialization after defaults).
+   *   2. Parse the verified envelope with Zod.
+   *   3. Validate event-specific payload.
    */
   async ingest(
-    rawBody: unknown,
+    rawBody: string | Buffer | unknown,
     signatureHeader?: string,
   ): Promise<IngestResult> {
-    // 1) Parse + structural validation.
-    const parsed = EventEnvelopeSchema.safeParse(rawBody);
+    // 1) HMAC verification first (BEFORE parsing) — FAIL-CLOSED.
+    //    - In production a hub secret is MANDATORY: with no secret configured the
+    //      hub would accept arbitrary unsigned events (order.paid, credit.approved,
+    //      payment.received, …) and trigger real billing/delivery. Reject instead.
+    //    - When a secret IS configured we ALWAYS require a present + valid
+    //      signature on the ENTIRE envelope (metadata + data), not just data.
+    if (!this.secret) {
+      if (process.env.NODE_ENV === "production") {
+        this.logger.error(
+          "🔒 Sin secreto de hub en producción: se rechaza el evento (fail-closed). " +
+            "Configura PRIZMA_NOUS_SECRET.",
+        );
+        throw new BadRequestException(
+          "Hub secret not configured: refusing to process unsigned events",
+        );
+      }
+      this.logger.warn(
+        "⚠️ Sin secreto de hub configurado (NODE_ENV!=production): se omite verificación de firma SOLO en dev.",
+      );
+    } else {
+      // Validate that rawBody is string/Buffer (has exact bytes to verify)
+      if (typeof rawBody !== "string" && !Buffer.isBuffer(rawBody)) {
+        this.logger.warn(
+          `rawBody debe ser string o Buffer para verificación HMAC; recibido: ${typeof rawBody}`,
+        );
+        throw new BadRequestException(
+          "rawBody must be string or Buffer for HMAC verification",
+        );
+      }
+
+      if (!signatureHeader) {
+        this.logger.warn(
+          `Evento sin firma en header x-prizma-signature — rechazado (se requiere firma).`,
+        );
+        throw new BadRequestException("Missing x-prizma-signature header");
+      }
+
+      try {
+        // Verify the raw body (throws on signature failure)
+        verifyRawBody(rawBody, signatureHeader, this.secret);
+        this.logger.debug(`✅ Firma HMAC verificada para envelope de rawBody`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Firma HMAC inválida: ${msg}`);
+        throw new BadRequestException(`Invalid HMAC signature: ${msg}`);
+      }
+    }
+
+    // 2) Parse + structural validation (now safe — signature already verified).
+    const bodyStr = typeof rawBody === "string" ? rawBody : (rawBody as Buffer).toString("utf-8");
+    let parsed;
+    try {
+      parsed = EventEnvelopeSchema.safeParse(JSON.parse(bodyStr));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Envelope inválido: ${msg}`);
+      throw new BadRequestException(`Invalid event envelope: ${msg}`);
+    }
     if (!parsed.success) {
       this.logger.warn(`Envelope inválido: ${parsed.error.message}`);
       throw new BadRequestException(`Invalid event envelope: ${parsed.error.message}`);
     }
     const env: EventEnvelope = parsed.data;
-
-    // 2) HMAC verification (only when a secret is configured).
-    if (this.secret) {
-      const signature = signatureHeader || env.signature;
-      // The publisher (HubClient) signs `env.data`, not the whole envelope.
-      const ok = verifySignature(env.data, signature, this.secret);
-      if (!ok) {
-        this.logger.warn(
-          `Firma HMAC inválida para evento ${env.eventId} (${env.eventType})`,
-        );
-        throw new BadRequestException("Invalid HMAC signature");
-      }
-    } else {
-      this.logger.debug(
-        "Sin secreto de hub configurado: se omite verificación de firma (modo abierto).",
-      );
-    }
 
     // 3) Payload contract validation.
     const check = validateEvent(env);

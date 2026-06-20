@@ -37,47 +37,50 @@ export class WebhooksController {
    *
    * Receives a signed {@link EventEnvelope} from any service in the ecosystem
    * (this is the exact path the contracts `HubClient` publishes to). It:
-   *   1. parses + validates the envelope (Zod),
-   *   2. verifies the HMAC signature (header `x-prizma-signature`, with the
-   *      legacy `x-cauce-signature` accepted as an alias) when a hub secret is
-   *      configured,
-   *   3. validates the event-specific payload (`validateEvent`),
-   *   4. dedupes by idempotencyKey and enqueues by priority for fan-out.
+   *   1. Captures the raw body from the request (before JSON parsing)
+   *   2. Verifies the HMAC-SHA256 signature of the ENTIRE envelope (header `x-prizma-signature`)
+   *   3. Parses + validates the envelope (Zod) on the verified body,
+   *   4. Validates the event-specific payload (`validateEvent`),
+   *   5. Dedupes by idempotencyKey and enqueues by priority for fan-out.
    *
    * Returns 202 Accepted on success; 400 on a malformed/invalid/unsigned event.
+   *
+   * CRITICAL: The raw body MUST be verified BEFORE parsing, so that Zod's
+   * .default() fields don't invalidate the HMAC. This ensures:
+   *   - HubClient signs the exact envelope JSON it sends
+   *   - Nous verifies the signature on the exact bytes received
+   *   - Both match byte-for-byte
    */
-  @Post("/nous")
-  @Post("/hubcentral")
+  @Post("nous")
   @HttpCode(202)
-  async handleHubCentralEvent(
+  async handleNousEvent(
     @Body() envelope: any,
-    @Headers("x-prizma-signature") prizmaSignature?: string,
-    @Headers("x-cauce-signature") legacySignature?: string,
+    @Headers("x-prizma-signature") signature?: string,
+    @Req() req?: any,
   ): Promise<any> {
-    // Prefer the new header; fall back to the legacy one so in-flight callers
-    // that still sign with `x-cauce-signature` keep working until R3/R4.
-    const signature = prizmaSignature || legacySignature;
     try {
-      const result = await this.eventProcessor.ingest(envelope, signature);
+      // Pass raw body and signature to EventProcessorService for proper verification order
+      const rawBody = (req as any)?.rawBody || JSON.stringify(envelope);
+      const result = await this.eventProcessor.ingest(rawBody, signature);
       this.logger.log(
-        `📥 hubcentral: ${result.eventType} (id=${result.eventId})${result.duplicate ? " [duplicate]" : ""}`,
+        `📥 nous: ${result.eventType} (id=${result.eventId})${result.duplicate ? " [duplicate]" : ""}`,
       );
       return { success: true, ...result };
     } catch (error) {
       // BadRequestException → 400 (malformed/invalid/bad signature).
       if (error instanceof BadRequestException) throw error;
-      this.logger.error(`❌ Error procesando evento hubcentral: ${error.message}`);
+      this.logger.error(`❌ Error procesando evento nous: ${error.message}`);
       throw new BadRequestException(error.message);
     }
   }
 
-  @Post("/graf")
-  async handleGrafWebhook(
+  @Post("hermes")
+  async handleHermesWebhook(
     @Body() payload: any,
     @Headers() headers: Record<string, string>,
     @Req() _req: Request,
   ): Promise<any> {
-    this.logger.log("📥 Webhook recibido de Graf", {
+    this.logger.log("📥 Webhook recibido de Hermes", {
       eventType: payload.event_type,
       source: headers["x-source"],
     });
@@ -94,10 +97,10 @@ export class WebhooksController {
 
       const context = {
         tenantId: headers["x-tenant-id"] || "default",
-        source: "graf",
+        source: "hermes",
       };
 
-      const result = await this.webhooksService.processGrafEvent(
+      const result = await this.webhooksService.processHermesEvent(
         payload,
         context,
       );
@@ -114,7 +117,7 @@ export class WebhooksController {
         result,
       };
     } catch (error) {
-      this.logger.error("❌ Error procesando webhook de Graf", {
+      this.logger.error("❌ Error procesando webhook de Hermes", {
         error: error.message,
         eventType: payload.event_type,
         tenantId: headers["x-tenant-id"],
@@ -146,7 +149,7 @@ export class WebhooksController {
    * Idempotencia: el dedupe real por `mpId` ocurre en el worker
    * (`wasAlreadyProcessed` + MpIdempotencyStore), no aquí, para no bloquear el ack.
    */
-  @Post("/mercadopago")
+  @Post("mercadopago")
   @HttpCode(200)
   async handleMercadoPagoWebhook(
     @Req() req: RawBodyRequest<Request>,
@@ -156,7 +159,20 @@ export class WebhooksController {
   ): Promise<{ received: true }> {
     // Raw body (Buffer) is required to reconstruct MP's signed manifest. It is
     // populated because the app is created with `{ rawBody: true }` (see main.ts).
-    const rawBody = req.rawBody ?? Buffer.from(JSON.stringify(body ?? {}));
+    // A re-serialized `JSON.stringify(body)` would NOT match MP's original bytes
+    // (key order/spacing/escapes), so signature verification could never pass.
+    // Fail-closed: if the raw buffer is unexpectedly missing, reject instead of
+    // verifying against reconstructed (and therefore wrong) bytes.
+    const rawBody = req.rawBody;
+    if (!rawBody) {
+      this.logger.error(
+        "🔒 MP webhook sin rawBody — no se puede verificar la firma. ¿Falta `{ rawBody: true }` en main.ts?",
+      );
+      throw new HttpException(
+        "Raw body no disponible: no se puede verificar la firma de Mercado Pago",
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
 
     const verification = this.mpGateway.verifyWebhook({ headers, query, rawBody });
     if (!verification.valid) {
@@ -204,9 +220,76 @@ export class WebhooksController {
   }
 
   /**
+   * 📦 Confirmation webhook from Talaria (MeraVuelta)
+   * Receives async delivery confirmations: { orderId, service, status, timestamp, data }
+   */
+  @Post("confirmation")
+  @HttpCode(200)
+  async handleConfirmation(
+    @Body() payload: any,
+    @Headers("x-api-key") apiKey?: string,
+  ): Promise<{ received: true }> {
+    try {
+      this.logger.log("📬 Confirmación recibida", {
+        orderId: payload?.orderId,
+        service: payload?.service,
+        status: payload?.status,
+        timestamp: payload?.timestamp,
+      });
+
+      // Auth: this mutates the order lifecycle downstream (Hermes + Iris), so it
+      // must be authenticated like the Hermes webhook. Validate the shared hub
+      // secret (constant-time, fail-closed) before enqueuing anything.
+      if (!apiKey) {
+        this.logger.warn("🔒 Confirmación sin x-api-key — rechazada.");
+        throw new UnauthorizedException("API Key requerida en header x-api-key");
+      }
+      await this.webhooksService.validateSimpleApiKey(apiKey);
+
+      const orderId = payload?.orderId ? String(payload.orderId) : "";
+      if (!orderId) {
+        this.logger.warn("⚠️ Confirmación sin orderId; se ignora.");
+        return { received: true };
+      }
+
+      // Map Talaria's confirmation to a canonical delivery event and enqueue it
+      // so the worker's canonical path (EventRouterService) propagates it to
+      // Hermes (order update) + Iris (customer notification) — Flow 7.
+      const envelope = this.webhooksService.buildDeliveryEnvelopeFromConfirmation(
+        payload,
+      );
+      if (envelope) {
+        await this.queueService.addToPriorityQueue(
+          {
+            id: envelope.eventId,
+            type: envelope.eventType,
+            source: "hub",
+            data: { envelope, idempotencyKey: envelope.idempotencyKey },
+          },
+          "high",
+        );
+        this.logger.log(
+          `📦 Confirmación Talaria encolada como ${envelope.eventType} (order=${orderId}).`,
+        );
+      } else {
+        this.logger.warn(
+          `⚠️ Confirmación con status no mapeable ("${payload?.status}"); solo registrada.`,
+        );
+      }
+
+      return { received: true };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      this.logger.error(`❌ Error procesando confirmación: ${error?.message}`);
+      // Still ack to avoid retries on non-auth errors.
+      return { received: true };
+    }
+  }
+
+  /**
    * 🏥 Health check endpoint
    */
-  @Post("/health")
+  @Post("health")
   async healthCheck(): Promise<any> {
     return {
       status: "ok",
