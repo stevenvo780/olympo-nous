@@ -24,12 +24,12 @@ export class PluginsController {
   @ApiOperation({ summary: "Catálogo global de plugins soportados" })
   getCatalog() {
     return [
-      { key: "apisigo", name: "Facturación SIGO", scopes: ["billing"] },
-      { key: "emw", name: "Mensajería EMW", scopes: ["messaging"] },
-      { key: "meravuelta", name: "Logística MeraVuelta", scopes: ["delivery"] },
-      { key: "sinergia", name: "POS Sinergia", scopes: ["pos"] },
-      { key: "graf", name: "E-commerce Graf", scopes: ["ecommerce"] },
-      { key: "fiar", name: "Créditos FIAR", scopes: ["credits"] },
+      { key: "logos", name: "Facturación SIGO", scopes: ["billing"] },
+      { key: "iris", name: "Mensajería IRIS", scopes: ["messaging"] },
+      { key: "talaria", name: "Logística Talaria", scopes: ["delivery"] },
+      { key: "talanton", name: "POS Talanton", scopes: ["pos"] },
+      { key: "hermes", name: "E-commerce Hermes", scopes: ["ecommerce"] },
+      { key: "pistis", name: "Créditos PISTIS", scopes: ["credits"] },
     ];
   }
 
@@ -40,7 +40,7 @@ export class PluginsController {
   @ApiQuery({
     name: "service",
     required: false,
-    description: "Servicio propietario (por defecto hubcentral)",
+    description: "Servicio propietario (por defecto nous)",
   })
   async listUserPlugins(
     @Req() req: Request,
@@ -60,7 +60,7 @@ export class PluginsController {
   @ApiQuery({
     name: "service",
     required: false,
-    description: "Servicio propietario (por defecto hubcentral)",
+    description: "Servicio propietario (por defecto nous)",
   })
   @ApiQuery({
     name: "subconfigId",
@@ -79,7 +79,7 @@ export class PluginsController {
     @Param("pluginKey") pluginKey: string,
     @Body() dto: ValidatedUpdatePluginDto,
     @Req() req: Request,
-    @Query("service") service = "hubcentral",
+    @Query("service") service = "nous",
     @Query("subconfigId") subconfigId?: string,
   ) {
     const userId = req.userContext?.userId;
@@ -123,7 +123,7 @@ export class PluginsController {
   @ApiQuery({
     name: "service",
     required: false,
-    description: "Servicio propietario (por defecto hubcentral)",
+    description: "Servicio propietario (por defecto nous)",
   })
   @ApiQuery({
     name: "subconfigId",
@@ -137,7 +137,7 @@ export class PluginsController {
   async getCredentials(
     @Param("pluginKey") pluginKey: string,
     @Req() req: Request,
-    @Query("service") service = "hubcentral",
+    @Query("service") service = "nous",
     @Query("subconfigId") subconfigId?: string,
   ) {
     const userId = req.userContext?.userId;
@@ -188,7 +188,7 @@ export class PluginsController {
   @ApiQuery({
     name: "service",
     required: false,
-    description: "Servicio propietario (por defecto hubcentral)",
+    description: "Servicio propietario (por defecto nous)",
   })
   @ApiQuery({
     name: "subconfigId",
@@ -205,7 +205,7 @@ export class PluginsController {
   async deleteCredentials(
     @Param("pluginKey") pluginKey: string,
     @Req() req: Request,
-    @Query("service") service = "hubcentral",
+    @Query("service") service = "nous",
     @Query("subconfigId") subconfigId?: string,
   ) {
     const userId = req.userContext?.userId;
@@ -252,7 +252,7 @@ export class PluginsController {
   async pluginHealth(
     @Param("pluginKey") pluginKey: string,
     @Req() req: Request,
-    @Query("service") service = "hubcentral",
+    @Query("service") service = "nous",
     @Query("subconfigId") subconfigId?: string,
   ) {
     const userId = req.userContext?.userId;

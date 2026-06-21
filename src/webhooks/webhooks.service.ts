@@ -1,4 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
+import * as crypto from "crypto";
+import { v4 as uuidv4 } from "uuid";
+import { EVENTS, type EventEnvelope } from "prizma-contracts";
 import { PluginsService } from "../plugins/plugins.service";
 import { QueueService } from "../queue/queue.service";
 
@@ -27,14 +30,29 @@ export class WebhooksService {
   ) {}
 
   async validateSimpleApiKey(providedApiKey: string): Promise<void> {
-    const expectedApiKey = process.env.HUB_CENTRAL_SECRET;
+    const expectedApiKey =
+      process.env.PRIZMA_NOUS_SECRET ||
+      process.env.PRIZMA_HUB_SECRET ||
+      process.env.HUB_CENTRAL_SECRET ||
+      process.env.NOUS_SECRET ||
+      process.env.NOUS_HUB_SECRET ||
+      process.env.CAUCE_HUB_SECRET;
 
     if (!providedApiKey) {
       this.logger.error("❌ Missing API key in request");
       throw new Error("Missing API key");
     }
 
-    if (providedApiKey !== expectedApiKey) {
+    // Fail-closed: never authenticate when no secret is configured.
+    if (!expectedApiKey) {
+      this.logger.error(
+        "🔒 Hub secret no configurado: se rechaza el webhook Hermes (fail-closed).",
+      );
+      throw new Error("Hub secret not configured");
+    }
+
+    // Constant-time comparison to avoid leaking the secret via timing.
+    if (!this.safeEqual(providedApiKey, expectedApiKey)) {
       this.logger.error("❌ Invalid API key provided");
       throw new Error("Invalid API key");
     }
@@ -42,13 +60,25 @@ export class WebhooksService {
     this.logger.log("✅ API key validated successfully");
   }
 
-  async processGrafEvent(
+  /** Length-safe, constant-time string comparison (avoids timing attacks). */
+  private safeEqual(a: string, b: string): boolean {
+    const bufA = Buffer.from(a, "utf8");
+    const bufB = Buffer.from(b, "utf8");
+    if (bufA.length !== bufB.length) {
+      // Compare against itself to keep the work constant even on length mismatch.
+      crypto.timingSafeEqual(bufA, bufA);
+      return false;
+    }
+    return crypto.timingSafeEqual(bufA, bufB);
+  }
+
+  async processHermesEvent(
     payload: any,
     context?: WebhookContext,
   ): Promise<ProcessingResult> {
     const rawEventType = payload.event_type || payload.eventType;
     const eventType = this.normalizeEventType(rawEventType);
-    this.logger.log(`🎯 Processing Graf event: ${rawEventType} → ${eventType}`);
+    this.logger.log(`🎯 Processing Hermes event: ${rawEventType} → ${eventType}`);
 
     const result: ProcessingResult = {
       success: true,
@@ -109,21 +139,94 @@ export class WebhooksService {
         id: `${Date.now()}-${Math.random()}`,
         type: eventType,
         data: { ...payload, userCredentials },
-        source: "graf",
+        source: "hermes",
       });
 
       result.pluginsTriggered.push("queued");
 
       this.logger.log(
-        `✅ Graf event processed: ${result.pluginsTriggered.length} plugins triggered`,
+        `✅ Hermes event processed: ${result.pluginsTriggered.length} plugins triggered`,
       );
       return result;
     } catch (error) {
-      this.logger.error(`❌ Error processing Graf event: ${error.message}`);
+      this.logger.error(`❌ Error processing Hermes event: ${error.message}`);
       result.success = false;
       result.errors.push(error.message);
       return result;
     }
+  }
+
+  /**
+   * Map a Talaria (MeraVuelta) delivery confirmation
+   * `{ orderId, service, status, timestamp, data }` to a canonical
+   * delivery contract envelope so the worker's EventRouterService can propagate
+   * it to Hermes (order update) + Iris (customer notification) — Flow 7.
+   *
+   * Returns null when the status is not mappable (caller just logs + acks).
+   */
+  buildDeliveryEnvelopeFromConfirmation(payload: any): EventEnvelope | null {
+    const orderId = payload?.orderId ? String(payload.orderId) : "";
+    if (!orderId) return null;
+
+    const status = this.normalizeDeliveryStatus(payload?.status);
+    if (!status) return null;
+
+    const deliveryId = String(
+      payload?.deliveryId ?? payload?.data?.deliveryId ?? `talaria:${orderId}`,
+    );
+    const completed = status === "delivered";
+    const eventType = completed
+      ? EVENTS.DELIVERY_COMPLETED
+      : EVENTS.DELIVERY_STATUS_UPDATE;
+
+    // Both connectors read `data.orderId`; the schema needs deliveryId/status.
+    const data: Record<string, any> = completed
+      ? {
+          deliveryId,
+          orderId,
+          at: payload?.timestamp || new Date().toISOString(),
+        }
+      : { deliveryId, orderId, status };
+
+    return {
+      eventId: uuidv4(),
+      eventType,
+      timestamp: new Date().toISOString(),
+      source: "talaria",
+      data,
+      // Stable idempotency key per (order, status) so re-deliveries collapse.
+      idempotencyKey: `talaria:confirmation:${orderId}:${status}`,
+      priority: "high",
+    };
+  }
+
+  /** Normalize Talaria delivery status to the contract enum; null if unknown. */
+  private normalizeDeliveryStatus(
+    st?: string,
+  ): "assigned" | "picked_up" | "in_transit" | "delivered" | "failed" | null {
+    const s = String(st || "").toLowerCase().trim();
+    const map: Record<
+      string,
+      "assigned" | "picked_up" | "in_transit" | "delivered" | "failed"
+    > = {
+      assigned: "assigned",
+      asignado: "assigned",
+      picked_up: "picked_up",
+      pickedup: "picked_up",
+      recogido: "picked_up",
+      in_transit: "in_transit",
+      intransit: "in_transit",
+      en_transito: "in_transit",
+      en_camino: "in_transit",
+      delivered: "delivered",
+      entregado: "delivered",
+      completed: "delivered",
+      completado: "delivered",
+      failed: "failed",
+      fallido: "failed",
+      fallida: "failed",
+    };
+    return map[s] || null;
   }
 
   private normalizeEventType(evt?: string): string {

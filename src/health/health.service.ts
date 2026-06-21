@@ -62,12 +62,13 @@ export class HealthService {
    */
   async getEcosystemHealth(): Promise<any> {
     const systems = [
-      { name: "graf", url: process.env.GRAF_API_URL },
-      { name: "emw", url: process.env.EMW_API_URL },
-      { name: "meravuelta", url: process.env.MERAVUELTA_API_URL },
-      { name: "fiar", url: process.env.FIAR_API_URL },
-      { name: "sinergia", url: process.env.SINERGIA_API_URL },
-      { name: "apisigo", url: process.env.APISIGO_API_URL },
+      { name: "hermes", url: process.env.HERMES_API_URL },
+      { name: "iris", url: process.env.IRIS_API_URL },
+      { name: "talaria", url: process.env.TALARIA_API_URL },
+      { name: "pistis", url: process.env.PISTIS_API_URL },
+      { name: "talanton", url: process.env.TALANTON_API_URL },
+      { name: "logos", url: process.env.LOGOS_API_URL },
+      { name: "mnemosyne", url: process.env.MNEMOSYNE_API_URL },
     ];
 
     const checks = await Promise.allSettled(

@@ -4,7 +4,7 @@ import { firstValueFrom } from "rxjs";
 import { PluginsService } from "../../plugins/plugins.service";
 import { randomUUID } from "crypto";
 
-export interface GrafOrder {
+export interface HermesOrder {
   id: number;
   status: "pending" | "paid" | "shipped" | "delivered" | "canceled";
   paymentMethod?: "cash" | "bank_transfer" | "wompi" | "credit" | "bold" | string;
@@ -32,7 +32,7 @@ export interface GrafOrder {
       sigoUsername?: string;
     };
   };
-  items: GrafOrderItem[];
+  items: HermesOrderItem[];
   amount: {
     discountTotal: number;
     taxTotal: number;
@@ -61,7 +61,7 @@ export interface GrafOrder {
   updatedAt: string;
 }
 
-export interface GrafOrderItem {
+export interface HermesOrderItem {
   id: number;
   product: {
     id: number;
@@ -111,7 +111,7 @@ export interface SigoInvoiceData {
   observations?: string;
 }
 
-function extractNotes(order: GrafOrder): string | undefined {
+function extractNotes(order: HermesOrder): string | undefined {
   try {
     const ans = Array.isArray(order.customAnswers) ? order.customAnswers : [];
     const hit = ans.find((a) => {
@@ -130,9 +130,9 @@ function addDays(base: Date, days: number): string {
   return d.toISOString().split("T")[0];
 }
 
-// Conversión simple Graf → Sigo (con configuración opcional)
-export const convertGrafOrderToSigoInvoice = (
-  order: GrafOrder,
+// Conversión simple Hermes → Sigo (con configuración opcional)
+export const convertHermesOrderToSigoInvoice = (
+  order: HermesOrder,
   cfg?: any,
   eventType?: string,
 ): SigoInvoiceData => {
@@ -176,7 +176,7 @@ export const convertGrafOrderToSigoInvoice = (
     },
     customerData,
     items: order.items.map((item) => ({
-      code: item.product.code || item.product.sku || `GRAF-${item.product.id}`,
+      code: item.product.code || item.product.sku || `HERMES-${item.product.id}`,
       description: item.product.title,
       quantity: item.quantity,
       price: parseFloat(item.finalPrice.toString()),
@@ -184,7 +184,7 @@ export const convertGrafOrderToSigoInvoice = (
       ...(defaultTaxId ? { taxes: [{ id: Number(defaultTaxId) }] } : {}),
     })),
     observations:
-      `Factura Graf - Pedido #${order.id} - Tienda: ${order.store.name}` +
+      `Factura Hermes - Pedido #${order.id} - Tienda: ${order.store.name}` +
       (userNotes ? `\nNotas: ${userNotes}` : ""),
   };
 
@@ -198,7 +198,7 @@ export const convertGrafOrderToSigoInvoice = (
       (cfg && (cfg as any).config && (cfg as any).config.payments) ||
       {};
 
-    // Tomar método de pago nativo si viene: order.paymentMethod (no tipado en la interfaz pero llega desde Graf)
+    // Tomar método de pago nativo si viene: order.paymentMethod (no tipado en la interfaz pero llega desde Hermes)
     const rawPaymentMethod: string | undefined = (order as any)?.paymentMethod;
 
     // Selección de key de método por evento
@@ -267,25 +267,25 @@ function genCorrelationId(): string {
 }
 
 @Injectable()
-export class ApiSigoConnectorService {
-  private readonly logger = new Logger(ApiSigoConnectorService.name);
-  private readonly apiSigoUrl: string;
+export class LogosConnectorService {
+  private readonly logger = new Logger(LogosConnectorService.name);
+  private readonly logosUrl: string;
 
   constructor(
     private httpService: HttpService,
     private pluginsService: PluginsService,
   ) {
-    this.apiSigoUrl = process.env.APISIGO_API_URL || "";
-    if (!this.apiSigoUrl) {
+    this.logosUrl = process.env.LOGOS_API_URL || "";
+    if (!this.logosUrl) {
       // No es fatal: el envío será opcional y se marcará como 'skipped'
       this.logger.warn(
-        "⚠️ APISIGO_API_URL no está definida. El envío a ApiSigo será omitido (skipped)",
+        "⚠️ LOGOS_API_URL no está definida. El envío a Logos será omitido (skipped)",
       );
     }
   }
 
   async enviarFactura(
-    order: GrafOrder,
+    order: HermesOrder,
     userEmail: string,
     storeId: string,
     eventType?: string,
@@ -293,7 +293,7 @@ export class ApiSigoConnectorService {
   ): Promise<any> {
     const correlationId = genCorrelationId();
     try {
-      this.logger.log("Enviando factura a ApiSigo", {
+      this.logger.log("Enviando factura a Logos", {
         orderId: order?.id,
         storeId,
         correlationId,
@@ -304,8 +304,8 @@ export class ApiSigoConnectorService {
         eventType,
       });
 
-      if (!this.apiSigoUrl) {
-        this.logger.warn("URL de ApiSigo no configurada, omitiendo envío (skipped)");
+      if (!this.logosUrl) {
+        this.logger.warn("URL de Logos no configurada, omitiendo envío (skipped)");
         return {
           attempted: false,
           skipped: true,
@@ -341,13 +341,13 @@ export class ApiSigoConnectorService {
         user.id,
       );
 
-      const allCreds = userCredentials.credentials["apisigo"] || {};
+      const allCreds = userCredentials.credentials["logos"] || {};
       let sigoCredentials: any = allCreds;
       let selectedSubKey: string | undefined;
 
       if (!allCreds?.apiKey || !allCreds?.username) {
         const candidateKeys = [
-          `graf-store-${storeId}`,
+          `hermes-store-${storeId}`,
           storeId,
           order.store?.name,
           "default",
@@ -380,7 +380,7 @@ export class ApiSigoConnectorService {
         (o && ((o as any).paymentMapping || (o as any).payments ||
           ((o as any).config && ((o as any).config.paymentMapping || (o as any).config.payments)))) || undefined;
 
-      const storeKey = `graf-store-${storeId}`;
+      const storeKey = `hermes-store-${storeId}`;
       const candidates: Array<{ key: string; obj: any }> = [
         { key: "cfg-arg", obj: cfg },
         selectedSubKey ? { key: `sub:${selectedSubKey}`, obj: (allCreds as any)[selectedSubKey!] } : { key: "sub:<none>", obj: undefined },
@@ -409,16 +409,16 @@ export class ApiSigoConnectorService {
         }
       }
 
-      const sigoInvoiceData = convertGrafOrderToSigoInvoice(
+      const sigoInvoiceData = convertHermesOrderToSigoInvoice(
         order,
         effectiveCfg,
         eventType,
       );
 
-      // LOG: Debug del payload que se envía a ApiSigo
-      this.logger.debug(`[ApiSigo] Payload completo para orden ${order.id}:`, JSON.stringify(sigoInvoiceData, null, 2));
+      // LOG: Debug del payload que se envía a Logos
+      this.logger.debug(`[Logos] Payload completo para orden ${order.id}:`, JSON.stringify(sigoInvoiceData, null, 2));
 
-      const signatureHeader = process.env.APISIGO_HUB_WEBHOOK_SECRET;
+      const signatureHeader = process.env.LOGOS_HUB_WEBHOOK_SECRET;
 
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -430,7 +430,7 @@ export class ApiSigoConnectorService {
       // Enviar a API de Sigo
       const response = await firstValueFrom(
         this.httpService.post(
-          `${this.apiSigoUrl}/api/invoices`,
+          `${this.logosUrl}/api/invoices`,
           sigoInvoiceData,
           {
             headers,
@@ -439,7 +439,7 @@ export class ApiSigoConnectorService {
         ),
       );
 
-      this.logger.log("Respuesta de ApiSigo", {
+      this.logger.log("Respuesta de Logos", {
         orderId: order.id,
         correlationId,
         status: (response as any)?.status,
@@ -457,7 +457,7 @@ export class ApiSigoConnectorService {
         `Error enviando factura pedido ${order?.id}`,
         (error && (error as any).message) || String(error),
       );
-      this.logger.error("Error detalle ApiSigo", {
+      this.logger.error("Error detalle Logos", {
         correlationId,
         status: error?.response?.status,
         data: error?.response?.data?.error || error?.response?.data,

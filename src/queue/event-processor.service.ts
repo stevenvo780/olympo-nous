@@ -81,16 +81,6 @@ export class EventProcessorService {
         "⚠️ Sin secreto de hub configurado (NODE_ENV!=production): se omite verificación de firma SOLO en dev.",
       );
     } else {
-      // Validate that rawBody is string/Buffer (has exact bytes to verify)
-      if (typeof rawBody !== "string" && !Buffer.isBuffer(rawBody)) {
-        this.logger.warn(
-          `rawBody debe ser string o Buffer para verificación HMAC; recibido: ${typeof rawBody}`,
-        );
-        throw new BadRequestException(
-          "rawBody must be string or Buffer for HMAC verification",
-        );
-      }
-
       if (!signatureHeader) {
         this.logger.warn(
           `Evento sin firma en header x-prizma-signature — rechazado (se requiere firma).`,
@@ -98,15 +88,32 @@ export class EventProcessorService {
         throw new BadRequestException("Missing x-prizma-signature header");
       }
 
+      // El emisor (HubClient.signEnvelope) firma el envelope CANÓNICO
+      // {eventId, eventType, timestamp, source, data}, NO el body crudo entero
+      // (que ademas incluye priority/idempotencyKey/signature). Verificar el raw
+      // completo NO coincidiria. Reconstruimos el canónico desde el JSON crudo
+      // (JSON.parse plano, sin Zod, para no aplicar defaults antes de verificar).
+      let obj: Record<string, unknown>;
       try {
-        // Verify the raw body (throws on signature failure)
-        verifyRawBody(rawBody, signatureHeader, this.secret);
-        this.logger.debug(`✅ Firma HMAC verificada para envelope de rawBody`);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        this.logger.warn(`Firma HMAC inválida: ${msg}`);
-        throw new BadRequestException(`Invalid HMAC signature: ${msg}`);
+        if (typeof rawBody === "string") obj = JSON.parse(rawBody);
+        else if (Buffer.isBuffer(rawBody))
+          obj = JSON.parse(rawBody.toString("utf-8"));
+        else obj = rawBody as Record<string, unknown>;
+      } catch {
+        throw new BadRequestException("Invalid event envelope JSON");
       }
+      const canonical = {
+        eventId: obj.eventId as string,
+        eventType: obj.eventType as string,
+        timestamp: obj.timestamp as string,
+        source: obj.source as string,
+        data: obj.data as Record<string, unknown>,
+      };
+      if (!verifyEnvelope(canonical, signatureHeader, this.secret)) {
+        this.logger.warn(`Firma HMAC inválida (envelope canónico) — rechazado.`);
+        throw new BadRequestException("Invalid HMAC signature");
+      }
+      this.logger.debug(`✅ Firma HMAC verificada (envelope canónico)`);
     }
 
     // 2) Parse + structural validation (now safe — signature already verified).

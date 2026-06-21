@@ -1,8 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
-  ApiSigoConnectorService,
-  GrafOrder,
-} from "./apisigo/apisigo-connector.service";
+  LogosConnectorService,
+  HermesOrder,
+} from "./logos/logos-connector.service";
 import { PluginsService } from "../plugins/plugins.service";
 
 @Injectable()
@@ -10,18 +10,18 @@ export class ConnectorOrchestratorService {
   private readonly logger = new Logger(ConnectorOrchestratorService.name);
 
   constructor(
-    private apiSigoConnector: ApiSigoConnectorService,
+    private logosConnector: LogosConnectorService,
     private pluginsService: PluginsService,
   ) {}
 
-  private async getApiSigoConfig(userEmail: string, storeId: string) {
+  private async getLogosConfig(userEmail: string, storeId: string) {
     try {
       const user = await this.pluginsService.findUserByEmail(userEmail);
       if (!user) return {} as any;
       const creds = await this.pluginsService.getUserCredentials(user.id);
-      const allCreds = (creds?.credentials || {})["apisigo"] || {};
+      const allCreds = (creds?.credentials || {})["logos"] || {};
       const candidateKeys = [
-        `graf-store-${storeId}`,
+        `hermes-store-${storeId}`,
         storeId,
         "default",
       ].filter(Boolean) as string[];
@@ -35,13 +35,13 @@ export class ConnectorOrchestratorService {
 
       return allCreds || {};
     } catch (e: any) {
-      this.logger.warn(`No se pudo resolver config apisigo: ${e && e.message}`);
+      this.logger.warn(`No se pudo resolver config logos: ${e && e.message}`);
       return {} as any;
     }
   }
 
   public async processEvent(
-    order: GrafOrder,
+    order: HermesOrder,
     eventType: string,
     userEmail: string,
     storeId: string,
@@ -50,13 +50,13 @@ export class ConnectorOrchestratorService {
       `🎯 Procesando evento: ${eventType} - Pedido ${order.id} - Tienda ${storeId}`,
     );
     try {
-      const apisigoCfg = await this.getApiSigoConfig(userEmail, storeId);
+      const logosCfg = await this.getLogosConfig(userEmail, storeId);
       const single: string | undefined =
-        (apisigoCfg && (apisigoCfg as any).triggerEvent) ||
-        (apisigoCfg && (apisigoCfg as any).config && (apisigoCfg as any).config.triggerEvent);
+        (logosCfg && (logosCfg as any).triggerEvent) ||
+        (logosCfg && (logosCfg as any).config && (logosCfg as any).config.triggerEvent);
       const arr: string[] | undefined =
-        (Array.isArray((apisigoCfg as any)?.triggerEvents) && (apisigoCfg as any).triggerEvents) ||
-        (Array.isArray((apisigoCfg as any)?.config?.triggerEvents) && (apisigoCfg as any).config.triggerEvents) ||
+        (Array.isArray((logosCfg as any)?.triggerEvents) && (logosCfg as any).triggerEvents) ||
+        (Array.isArray((logosCfg as any)?.config?.triggerEvents) && (logosCfg as any).config.triggerEvents) ||
         undefined;
 
       const effectiveTriggerRaw = (typeof single === 'string' && single.trim())
@@ -100,7 +100,7 @@ export class ConnectorOrchestratorService {
         return map[e] || e;
       };
 
-      const statusToEvent = (st?: GrafOrder["status"]): string => {
+      const statusToEvent = (st?: HermesOrder["status"]): string => {
         const s = String(st || "").toLowerCase().trim();
         const map: Record<string, string> = {
           "paid": "order.paid",
@@ -149,12 +149,12 @@ export class ConnectorOrchestratorService {
         return;
       }
 
-      const resp = await this.apiSigoConnector.enviarFactura(
+      const resp = await this.logosConnector.enviarFactura(
         order,
         userEmail,
         storeId,
         effectiveIncoming,
-        apisigoCfg,
+        logosCfg,
       );
       if (resp?.skipped) {
         this.logger.warn(

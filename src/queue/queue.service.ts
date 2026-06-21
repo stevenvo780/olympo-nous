@@ -11,6 +11,7 @@ type Priority = "critical" | "high" | "normal" | "low";
 export class QueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(QueueService.name);
   private redis: Redis;
+  private isReady = false;
   private readonly queueName = "hub:events";
 
   /**
@@ -44,9 +45,34 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
       this.logger.log("Conectado a Redis para colas");
     });
 
+    // `ready` fires once the connection is usable (auth done, SELECT done).
+    this.redis.on("ready", () => {
+      this.isReady = true;
+      this.logger.log("Redis listo para colas");
+    });
+
+    this.redis.on("end", () => {
+      this.isReady = false;
+    });
+
     this.redis.on("error", (err) => {
+      this.isReady = false;
       this.logger.error("Error de Redis:", err);
     });
+  }
+
+  /** True once Redis has completed its initial handshake and is usable. */
+  isRedisReady(): boolean {
+    return this.isReady;
+  }
+
+  /** Wait until Redis is ready (used by the worker before it starts BRPOP). */
+  async waitUntilReady(timeoutMs = 30000): Promise<boolean> {
+    const start = Date.now();
+    while (!this.isReady && Date.now() - start < timeoutMs) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    return this.isReady;
   }
 
   async onModuleDestroy() {
@@ -108,7 +134,7 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Encola un evento canónico priorizado (orquestación @olympo/contracts).
+   * Encola un evento canónico priorizado (orquestación prizma-contracts).
    * `critical`/`high`/`normal`/`low` se atienden en ese orden por el worker.
    */
   async addToPriorityQueue(
@@ -131,16 +157,25 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
    * low → legacy(hub:events). Bloquea hasta `timeout` segundos.
    */
   async getNextByPriority(timeout: number = 5): Promise<any[]> {
+    // Don't issue a blocking BRPOP while Redis is still (re)connecting: it would
+    // either throw or queue up. Skip this tick and let the worker retry.
+    if (!this.isReady) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      return [];
+    }
     try {
       // BRPOP atiende las claves en orden: la primera con datos gana.
-      const lanes = [
+      // ioredis' multi-key overload is `brpop(...keys, timeout)`; spreading the
+      // lanes keeps it correctly typed (no `as` cast that could mask a signature
+      // change). The numeric timeout is the final argument.
+      const lanes: string[] = [
         this.priorityQueues.critical,
         this.priorityQueues.high,
         this.priorityQueues.normal,
         this.priorityQueues.low,
         this.queueName, // legacy lane (Graf webhook path)
       ];
-      const result = await this.redis.brpop(...(lanes as [string]), timeout);
+      const result = await this.redis.brpop(...lanes, timeout);
       if (result) {
         const [, eventData] = result;
         return [JSON.parse(eventData)];
@@ -195,6 +230,40 @@ export class QueueService implements OnModuleInit, OnModuleDestroy {
 
     await this.redis.lpush(this.queueName, JSON.stringify(payload));
     this.logger.debug(`Evento ${eventData.id} reencolado`);
+  }
+
+  /**
+   * Best-effort distributed lock (SET key value NX EX ttl). Returns true if the
+   * caller acquired it. Used by the worker so that, across multiple replicas,
+   * the SAME event is not fanned-out concurrently (defense-in-depth on top of
+   * the central idempotency + per-destination x-idempotency-key).
+   */
+  async tryAcquireLock(key: string, ttlSeconds = 60): Promise<boolean> {
+    if (!this.isReady) return false;
+    try {
+      const res = await this.redis.set(
+        `hub:lock:${key}`,
+        "1",
+        "EX",
+        ttlSeconds,
+        "NX",
+      );
+      return res === "OK";
+    } catch (error) {
+      this.logger.error("Error adquiriendo lock:", error);
+      // On lock-store failure, allow processing (the idempotency layer still
+      // protects correctness); better to process than to silently drop.
+      return true;
+    }
+  }
+
+  /** Release a lock acquired with {@link tryAcquireLock}. */
+  async releaseLock(key: string): Promise<void> {
+    try {
+      await this.redis.del(`hub:lock:${key}`);
+    } catch (error) {
+      this.logger.error("Error liberando lock:", error);
+    }
   }
 
   /**

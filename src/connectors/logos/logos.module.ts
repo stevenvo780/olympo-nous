@@ -1,11 +1,11 @@
 import { Module } from "@nestjs/common";
 import { HttpModule } from "@nestjs/axios";
-import { ApiSigoConnectorService } from "./apisigo-connector.service";
+import { LogosConnectorService } from "./logos-connector.service";
 import { PluginsModule } from "../../plugins/plugins.module";
 
 @Module({
   imports: [HttpModule, PluginsModule],
-  providers: [ApiSigoConnectorService],
-  exports: [ApiSigoConnectorService],
+  providers: [LogosConnectorService],
+  exports: [LogosConnectorService],
 })
-export class ApiSigoModule {}
+export class LogosModule {}

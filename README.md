@@ -1,11 +1,11 @@
-# 🚀 Hub Central - ERP Humanizar
+# 🚀 Hub Central - ERP Prizma
 
-Hub Central orquesta eventos y flujos de negocio del ecosistema Humanizar.
+Hub Central orquesta eventos y flujos de negocio del ecosistema Prizma.
 
 ## 🌟 Descripción
 
 Conecta servicios del ecosistema:
-- Graf (e‑commerce), EMW (WhatsApp), MeraVuelta (delivery), FIAR (crédito), Sinergia (POS), ApiSigo (facturación)
+- Hermes (e‑commerce), IRIS (WhatsApp), Talaria (delivery), PISTIS (crédito), Talanton (POS), Logos (facturación)
 
 ## ✨ Características
 
@@ -22,7 +22,7 @@ Conecta servicios del ecosistema:
 ├─────────────────────────────────────────────────────────────┤
 │  Webhooks  │  Events Service  │  Connectors  │  Queue(Redis)│
 └─────────────────────────────────────────────────────────────┘
-          Graf / EMW / MeraVuelta / FIAR / Sinergia / ApiSigo
+          Hermes / IRIS / Talaria / PISTIS / Talanton / Logos
 ```
 
 ## 🚀 Arranque Rápido
@@ -38,7 +38,7 @@ Nota: Existe un `docker-compose.yml` legado con MySQL. El código actual usa Typ
 
 1) Variables de entorno
 ```bash
-cd HubCentral
+cd Nous
 cp .env.example .env
 # Editar .env (PORT, DB_*, REDIS_*, API keys)
 ```
@@ -64,9 +64,9 @@ npm run start:prod
 ```bash
 docker compose -f docker-compose.ecosystem.yml up -d
 ```
-- Solo HubCentral (archivo local):
+- Solo Nous (archivo local):
 ```bash
-docker compose -f HubCentral/docker-compose.yml up -d
+docker compose -f Nous/docker-compose.yml up -d
 ```
 
 ## 📡 API
@@ -83,13 +83,13 @@ Base URL: `http://localhost:3007/api/v1`
 - `POST /events/cleanup` → Limpiar antiguos
 
 ### Webhooks
-- `POST /webhooks/graf` → Endpoint universal para eventos de Graf
-  - Headers: `x-tenant-id`, `x-graf-signature` (HMAC‑SHA256)
+- `POST /webhooks/hermes` → Endpoint universal para eventos de Hermes
+  - Headers: `x-tenant-id`, `x-hermes-signature` (HMAC‑SHA256)
 - `POST /webhooks/pedido-pagado` → Específico para pedido pagado
-- `POST /webhooks/delivery-confirmation` (MeraVuelta)
-- `POST /webhooks/delivery-status-update` (MeraVuelta)
-- `POST /webhooks/notification-confirmation` (EMW)
-- `POST /webhooks/notification-status-update` (EMW)
+- `POST /webhooks/delivery-confirmation` (Talaria)
+- `POST /webhooks/delivery-status-update` (Talaria)
+- `POST /webhooks/notification-confirmation` (IRIS)
+- `POST /webhooks/notification-status-update` (IRIS)
 
 ### Health y Plugins
 - `GET /health` → Estado general
@@ -104,10 +104,10 @@ Swagger: `http://localhost:3007/api/docs`
 
 ## 🔄 Flujos Soportados (ejemplos)
 
-- Venta e‑commerce pagada (Graf → ApiSigo → MeraVuelta → EMW)
+- Venta e‑commerce pagada (Hermes → Logos → Talaria → IRIS)
 - Venta e‑commerce pendiente: notifica POS y continúa al pagar
-- Venta en tienda: Sinergia → delivery/mensajería/facturación
-- Sincronización de inventario Graf ↔ Sinergia
+- Venta en tienda: Talanton → delivery/mensajería/facturación
+- Sincronización de inventario Hermes ↔ Talanton
 
 ## 🔧 Variables de Entorno (ejemplo)
 
@@ -118,24 +118,24 @@ PORT=3007
 # PostgreSQL (por defecto en código)
 DB_HOST=localhost
 DB_PORT=5432
-DB_USERNAME=postgres
-DB_PASSWORD=postgres
-DB_NAME=hub_central
+DB_USERNAME=prizma
+DB_PASSWORD=prizma
+DB_NAME=nous
 
 # Redis
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
 # APIs del ecosistema
-GRAF_API_URL=http://localhost:3000
-EMW_API_URL=http://localhost:3001
-MERAVUELTA_API_URL=http://localhost:3006
-APISIGO_API_URL=http://localhost:3004
+HERMES_API_URL=http://localhost:3000
+IRIS_API_URL=http://localhost:3001
+TALARIA_API_URL=http://localhost:3006
+LOGOS_API_URL=http://localhost:3004
 
-# Firma opcional hacia ApiSigo (recomendado dejar vacío si no la usas)
-# Si se define, HubCentral enviará el header x-hub-signature con este valor.
-# Debe coincidir con HUB_WEBHOOK_SECRET en ApiSigo; si no coincide, ApiSigo rechazará la petición.
-APISIGO_HUB_WEBHOOK_SECRET=
+# Firma opcional hacia Logos (recomendado dejar vacío si no la usas)
+# Si se define, Nous enviará el header x-hub-signature con este valor.
+# Debe coincidir con HUB_WEBHOOK_SECRET en Logos; si no coincide, Logos rechazará la petición.
+LOGOS_HUB_WEBHOOK_SECRET=
 ```
 
 ## 📊 Monitoreo Rápido
@@ -173,8 +173,8 @@ Los logs se almacenan en:
 
 ### Docker
 ```bash
-docker build -t hub-central .
-docker run -p 3007:3007 hub-central
+docker build -t nous .
+docker run -p 3007:3007 nous
 ```
 
 ### Production
@@ -185,4 +185,4 @@ docker run -p 3007:3007 hub-central
 
 ---
 
-**Parte del Ecosistema Humanizar** 🌟
+**Parte del Ecosistema Prizma** 🌟

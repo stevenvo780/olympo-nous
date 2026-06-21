@@ -1,7 +1,7 @@
 import { Logger } from "@nestjs/common";
 import { HttpService } from "@nestjs/axios";
 import { firstValueFrom } from "rxjs";
-import { signPayload, type ServiceSource } from "@olympo/contracts";
+import { signPayload, type ServiceSource } from "prizma-contracts";
 
 export interface ConnectorResult {
   service: ServiceSource;
@@ -22,8 +22,8 @@ export interface ConnectorResult {
  *  - Idempotency: the canonical `idempotencyKey` is forwarded as the
  *    `x-idempotency-key` header so destinations can dedupe (and we also dedupe
  *    centrally in the router via Redis).
- *  - Signing: when `CAUCE_HUB_SECRET` is set, every outbound body is HMAC-signed
- *    with `x-cauce-signature`, matching the inbound verification on the hub.
+  *  - Signing: when a Nous/Hub secret is set, every outbound body is HMAC-signed
+ *    with `x-prizma-signature`, matching the inbound verification on the hub.
  */
 export abstract class DestinationConnectorBase {
   protected abstract readonly service: ServiceSource;
@@ -36,11 +36,70 @@ export abstract class DestinationConnectorBase {
   ) {
     this.logger = new Logger(loggerName);
     this.secret =
-      process.env.CAUCE_HUB_SECRET || process.env.HUB_CENTRAL_SECRET || undefined;
+      process.env.PRIZMA_NOUS_SECRET ||
+      process.env.PRIZMA_HUB_SECRET ||
+      process.env.HUB_CENTRAL_SECRET ||
+      process.env.NOUS_SECRET ||
+      process.env.NOUS_HUB_SECRET ||
+      process.env.CAUCE_HUB_SECRET ||
+      undefined;
   }
 
-  /** Resolve the destination base URL from env or the @olympo/contracts default. */
+  /** Resolve the destination base URL from env or the prizma-contracts default. */
   protected abstract baseUrl(): string;
+
+  /**
+   * Fault-tolerant PATCH to a destination service path.
+   * Returns a {@link ConnectorResult}; it resolves (never rejects) on any error.
+   */
+  protected async patch(
+    path: string,
+    body: unknown,
+    idempotencyKey?: string,
+    headers: Record<string, string> = {},
+  ): Promise<ConnectorResult> {
+    const base = this.baseUrl();
+    if (!base) {
+      this.logger.warn(
+        `[${this.service}] base URL no resuelta; omitiendo PATCH ${path} (skipped)`,
+      );
+      return { service: this.service, ok: false, skipped: true, reason: "missing_service_url" };
+    }
+
+    const url = `${base.replace(/\/$/, "")}${path}`;
+    const finalHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(idempotencyKey ? { "x-idempotency-key": idempotencyKey } : {}),
+      ...(this.secret ? { "x-prizma-signature": signPayload(body, this.secret) } : {}),
+      ...headers,
+    };
+
+    try {
+      const res = await firstValueFrom(
+        this.http.patch(url, body, { headers: finalHeaders, timeout: 15000 }),
+      );
+      this.logger.log(
+        `[${this.service}] PATCH ${path} ok (status=${(res as any)?.status})`,
+      );
+      return {
+        service: this.service,
+        ok: true,
+        status: (res as any)?.status,
+        data: (res as any)?.data,
+      };
+    } catch (err: any) {
+      this.logger.warn(
+        `[${this.service}] PATCH ${path} falló (no-fatal): ${err?.response?.status || ""} ${err?.message}`,
+      );
+      return {
+        service: this.service,
+        ok: false,
+        status: err?.response?.status,
+        reason: err?.message,
+        data: err?.response?.data,
+      };
+    }
+  }
 
   /**
    * Fault-tolerant POST to a destination service path.
@@ -64,7 +123,7 @@ export abstract class DestinationConnectorBase {
     const finalHeaders: Record<string, string> = {
       "Content-Type": "application/json",
       ...(idempotencyKey ? { "x-idempotency-key": idempotencyKey } : {}),
-      ...(this.secret ? { "x-cauce-signature": signPayload(body, this.secret) } : {}),
+      ...(this.secret ? { "x-prizma-signature": signPayload(body, this.secret) } : {}),
       ...headers,
     };
 

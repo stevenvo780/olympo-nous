@@ -4,12 +4,12 @@ import { Injectable } from "@nestjs/common";
 export class AppService {
   getInfo() {
     return {
-      name: "Hub Central ERP Humanizar",
+      name: "Hub Central ERP Prizma",
       description: "Orquestador central de eventos para el ecosistema ERP",
       status: "active",
       timestamp: new Date().toISOString(),
       ecosystem: {
-        systems: ["Graf", "EMW", "MeraVuelta", "FIAR", "Sinergia", "ApiSigo"],
+        systems: ["Hermes", "IRIS", "Talaria", "PISTIS", "Talanton", "Logos"],
         connectors: [
           "venta-a-factura-y-despacho",
           "stock-synchronization",

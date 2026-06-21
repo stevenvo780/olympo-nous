@@ -1,25 +1,25 @@
 import { Injectable } from "@nestjs/common";
 import { HttpService } from "@nestjs/axios";
-import { serviceUrl, type ServiceSource } from "@olympo/contracts";
+import { serviceUrl, type ServiceSource } from "prizma-contracts";
 import {
   DestinationConnectorBase,
   ConnectorResult,
 } from "../destination-connector.base";
 
 /**
- * ApiSoftia (CRM, Soft-ia) destination connector.
+ * Mnemosyne (CRM, Soft-ia) destination connector.
  * Reacts to ORDER_PAID / CUSTOMER_CREATED → CUSTOMER_UPDATE (Flow 1 & 5).
  */
 @Injectable()
-export class ApiSoftiaConnectorService extends DestinationConnectorBase {
-  protected readonly service: ServiceSource = "apisoftia";
+export class MnemosyneConnectorService extends DestinationConnectorBase {
+  protected readonly service: ServiceSource = "mnemosyne";
 
   constructor(http: HttpService) {
-    super(http, ApiSoftiaConnectorService.name);
+    super(http, MnemosyneConnectorService.name);
   }
 
   protected baseUrl(): string {
-    return process.env.APISOFTIA_API_URL || serviceUrl("apisoftia");
+    return process.env.MNEMOSYNE_API_URL || serviceUrl("mnemosyne");
   }
 
   /** customer.update — upsert the customer in the CRM. */

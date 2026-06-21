@@ -10,7 +10,7 @@ import { PluginsModule } from "./plugins/plugins.module";
 import { QueueModule } from "./queue/queue.module";
 import { MiddlewareModule } from "./middleware/middleware.module";
 import { UserResolverMiddleware } from "./middleware/user-resolver.middleware";
-import { OlympoModule } from "./cauce/cauce.module";
+import { PrizmaModule } from "./prizma/prizma.module";
 
 @Module({
   imports: [
@@ -29,7 +29,7 @@ import { OlympoModule } from "./cauce/cauce.module";
     }),
 
     ScheduleModule.forRoot(),
-    OlympoModule,
+    PrizmaModule,
     WebhooksModule,
     ConnectorsModule,
     HealthModule,

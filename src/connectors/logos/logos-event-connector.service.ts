@@ -1,29 +1,29 @@
 import { Injectable } from "@nestjs/common";
 import { HttpService } from "@nestjs/axios";
-import { serviceUrl, type ServiceSource } from "@olympo/contracts";
+import { serviceUrl, type ServiceSource } from "prizma-contracts";
 import {
   DestinationConnectorBase,
   ConnectorResult,
 } from "../destination-connector.base";
 
 /**
- * ApiSigo (e-invoicing) event-driven destination connector.
+ * Logos (e-invoicing) event-driven destination connector.
  *
- * NOTE: the existing {@link ApiSigoConnectorService} handles the rich, per-store
- * credentialed Graf→Sigo invoice flow (legacy Graf webhook path). This connector
- * is the thin, canonical-event entrypoint used by the @olympo/contracts router
+ * NOTE: the existing {@link LogosConnectorService} handles the rich, per-store
+ * credentialed Hermes→Sigo invoice flow (legacy Hermes webhook path). This connector
+ * is the thin, canonical-event entrypoint used by the prizma-contracts router
  * for INVOICE_CREATE coming from ORDER_PAID / POS_SALE_CREATED (Flow 1 & 3).
  */
 @Injectable()
-export class ApiSigoEventConnectorService extends DestinationConnectorBase {
-  protected readonly service: ServiceSource = "apisigo";
+export class LogosEventConnectorService extends DestinationConnectorBase {
+  protected readonly service: ServiceSource = "logos";
 
   constructor(http: HttpService) {
-    super(http, ApiSigoEventConnectorService.name);
+    super(http, LogosEventConnectorService.name);
   }
 
   protected baseUrl(): string {
-    return process.env.APISIGO_API_URL || serviceUrl("apisigo");
+    return process.env.LOGOS_API_URL || serviceUrl("logos");
   }
 
   /** invoice.create — request an e-invoice for an order/sale. */

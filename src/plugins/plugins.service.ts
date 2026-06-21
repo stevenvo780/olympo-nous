@@ -249,7 +249,7 @@ export class PluginsService {
   async getUserWebhookSecret(
     userId: string | undefined,
     pluginKey: string,
-    service = "hubcentral",
+    service = "nous",
   ): Promise<string | undefined> {
     if (!userId) return undefined;
     const row = await this.getUserPlugin(userId, service, pluginKey);

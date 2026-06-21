@@ -92,13 +92,13 @@ export class HttpLoggingInterceptor {
       const port = urlObj.port;
 
       const serviceMap = {
-        "3004": "[ApiSigo]",
+        "3004": "[Logos]",
 
-        "3006": "[MeraVuelta]",
-        "3001": "[EMW]",
-        "3002": "[FIAR]",
-        "4001": "[Sinergia]",
-        "3009": "[Graf]",
+        "3006": "[Talaria]",
+        "3001": "[IRIS]",
+        "8090": "[PISTIS]",
+        "4001": "[Talanton]",
+        "3009": "[Hermes]",
       };
 
       return serviceMap[port] || `[${urlObj.hostname}:${port}]`;

@@ -84,20 +84,20 @@
           }
         },
         {
-          "name": "Webhooks · Graf",
+          "name": "Webhooks · Hermes",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Content-Type", "value": "application/json" },
               { "key": "x-api-key", "value": "{{HUB_CENTRAL_SECRET}}" },
               { "key": "x-tenant-id", "value": "{{x_tenant_id}}" },
-              { "key": "x-source", "value": "graf" }
+              { "key": "x-source", "value": "hermes" }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"event_type\": \"order.paid\",\n  \"data\": {\n    \"order\": { \"id\": \"ord_123\", \"total\": 100.5 },\n    \"store\": { \"owner\": { \"email\": \"owner@example.com\" } }\n  }\n}"
             },
-            "url": { "raw": "{{base_url}}/webhooks/graf", "host": ["{{base_url}}"], "path": ["webhooks", "graf"] }
+            "url": { "raw": "{{base_url}}/webhooks/hermes", "host": ["{{base_url}}"], "path": ["webhooks", "hermes"] }
           }
         }
       ]
@@ -119,15 +119,15 @@
             "method": "GET",
             "header": [ { "key": "x-user-email", "value": "owner@example.com" } ],
             "url": {
-              "raw": "{{base_url}}/plugins/plugins?service=hubcentral",
+              "raw": "{{base_url}}/plugins/plugins?service=nous",
               "host": ["{{base_url}}"],
               "path": ["plugins", "plugins"],
-              "query": [ { "key": "service", "value": "hubcentral" } ]
+              "query": [ { "key": "service", "value": "nous" } ]
             }
           }
         },
         {
-          "name": "Credenciales · Upsert (apisigo)",
+          "name": "Credenciales · Upsert (logos)",
           "request": {
             "method": "PUT",
             "header": [
@@ -139,49 +139,49 @@
               "raw": "{\n  \"enabled\": true,\n  \"config\": {\n    \"apiKey\": \"{{HUB_CENTRAL_SECRET}}\"\n  }\n}"
             },
             "url": {
-              "raw": "{{base_url}}/plugins/plugins/apisigo/credentials?service=hubcentral",
+              "raw": "{{base_url}}/plugins/plugins/logos/credentials?service=nous",
               "host": ["{{base_url}}"],
-              "path": ["plugins", "plugins", "apisigo", "credentials"],
-              "query": [ { "key": "service", "value": "hubcentral" } ]
+              "path": ["plugins", "plugins", "logos", "credentials"],
+              "query": [ { "key": "service", "value": "nous" } ]
             }
           }
         },
         {
-          "name": "Credenciales · Obtener (apisigo)",
+          "name": "Credenciales · Obtener (logos)",
           "request": {
             "method": "GET",
             "header": [ { "key": "x-user-email", "value": "owner@example.com" } ],
             "url": {
-              "raw": "{{base_url}}/plugins/plugins/apisigo?service=hubcentral",
+              "raw": "{{base_url}}/plugins/plugins/logos?service=nous",
               "host": ["{{base_url}}"],
-              "path": ["plugins", "plugins", "apisigo"],
-              "query": [ { "key": "service", "value": "hubcentral" } ]
+              "path": ["plugins", "plugins", "logos"],
+              "query": [ { "key": "service", "value": "nous" } ]
             }
           }
         },
         {
-          "name": "Credenciales · Eliminar (apisigo)",
+          "name": "Credenciales · Eliminar (logos)",
           "request": {
             "method": "DELETE",
             "header": [ { "key": "x-user-email", "value": "owner@example.com" } ],
             "url": {
-              "raw": "{{base_url}}/plugins/plugins/apisigo/credentials?service=hubcentral",
+              "raw": "{{base_url}}/plugins/plugins/logos/credentials?service=nous",
               "host": ["{{base_url}}"],
-              "path": ["plugins", "plugins", "apisigo", "credentials"],
-              "query": [ { "key": "service", "value": "hubcentral" } ]
+              "path": ["plugins", "plugins", "logos", "credentials"],
+              "query": [ { "key": "service", "value": "nous" } ]
             }
           }
         },
         {
-          "name": "Plugin · Health (apisigo)",
+          "name": "Plugin · Health (logos)",
           "request": {
             "method": "GET",
             "header": [ { "key": "x-user-email", "value": "owner@example.com" } ],
             "url": {
-              "raw": "{{base_url}}/plugins/plugins/apisigo/health?service=hubcentral",
+              "raw": "{{base_url}}/plugins/plugins/logos/health?service=nous",
               "host": ["{{base_url}}"],
-              "path": ["plugins", "plugins", "apisigo", "health"],
-              "query": [ { "key": "service", "value": "hubcentral" } ]
+              "path": ["plugins", "plugins", "logos", "health"],
+              "query": [ { "key": "service", "value": "nous" } ]
             }
           }
         },

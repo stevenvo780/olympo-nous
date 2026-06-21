@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  hub-central:
+  nous:
     build: 
       context: .
       dockerfile: Dockerfile
@@ -12,9 +12,9 @@ services:
       - PORT=3007
       - DB_HOST=mysql
       - DB_PORT=3306
-      - DB_USERNAME=root
+      - DB_USERNAME=prizma
       - DB_PASSWORD=password
-      - DB_NAME=hub_central
+      - DB_NAME=nous
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
@@ -29,7 +29,7 @@ services:
     image: mysql:8.0
     environment:
       - MYSQL_ROOT_PASSWORD=password
-      - MYSQL_DATABASE=hub_central
+      - MYSQL_DATABASE=nous
     ports:
       - "3308:3306"
     volumes:

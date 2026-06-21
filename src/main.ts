@@ -8,7 +8,12 @@ import { AppModule } from "./app.module";
 
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // `rawBody: true` makes Nest capture the exact raw request buffer on
+  // `req.rawBody`. Mercado Pago signs the raw body verbatim, so the MP webhook
+  // (POST /webhooks/mercadopago) MUST verify against these original bytes — a
+  // re-serialized JSON.stringify produces different bytes (key order/spacing)
+  // and would fail every signature check.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   app.enableCors({
     origin: true,
@@ -30,7 +35,7 @@ async function bootstrap() {
   const config = new DocumentBuilder()
     .setTitle("Hub Central API")
     .setDescription(
-      "API del Hub Central de eventos para el ecosistema ERP Humanizar",
+      "API del Hub Central de eventos para el ecosistema ERP Prizma",
     )
     .setVersion("1.0")
     .addTag("events", "Gestión de eventos del ecosistema")

@@ -13,7 +13,7 @@ export async function isPluginEnabled(
 
     const plugin = await pluginsService.getUserPlugin(
       userId,
-      serviceKey || "hubcentral",
+      serviceKey || "nous",
       pluginKey,
     );
     return plugin?.enabled === true;

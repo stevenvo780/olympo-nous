@@ -8,7 +8,7 @@ import {
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
-export class ApiSigoCredentialsDto {
+export class LogosCredentialsDto {
   @ApiProperty({ description: "API Key para SIGO" })
   @IsString()
   @IsNotEmpty()
@@ -25,26 +25,26 @@ export class ApiSigoCredentialsDto {
   timeout?: number;
 }
 
-export class EmwCredentialsDto {
-  @ApiProperty({ description: "API Key para EMW" })
+export class IrisCredentialsDto {
+  @ApiProperty({ description: "API Key para IRIS" })
   @IsString()
   @IsNotEmpty()
   @Length(10, 100)
   apiKey: string;
 
-  @ApiPropertyOptional({ description: "Secret para webhooks EMW" })
+  @ApiPropertyOptional({ description: "Secret para webhooks IRIS" })
   @IsOptional()
   @IsString()
   webhookSecret?: string;
 
-  @ApiPropertyOptional({ description: "URL base del servicio EMW" })
+  @ApiPropertyOptional({ description: "URL base del servicio IRIS" })
   @IsOptional()
   @IsUrl()
   baseUrl?: string;
 }
 
-export class MeraVueltaCredentialsDto {
-  @ApiProperty({ description: "API Key para MeraVuelta" })
+export class TalariaCredentialsDto {
+  @ApiProperty({ description: "API Key para Talaria" })
   @IsString()
   @IsNotEmpty()
   @Length(10, 100)
@@ -55,14 +55,14 @@ export class MeraVueltaCredentialsDto {
   @IsString()
   username?: string;
 
-  @ApiPropertyOptional({ description: "URL base del servicio MeraVuelta" })
+  @ApiPropertyOptional({ description: "URL base del servicio Talaria" })
   @IsOptional()
   @IsUrl()
   baseUrl?: string;
 }
 
-export class GrafCredentialsDto {
-  @ApiProperty({ description: "API Key para Graf" })
+export class HermesCredentialsDto {
+  @ApiProperty({ description: "API Key para Hermes" })
   @IsString()
   @IsNotEmpty()
   @Length(10, 100)
@@ -73,19 +73,19 @@ export class GrafCredentialsDto {
   @IsNotEmpty()
   storeId: string;
 
-  @ApiPropertyOptional({ description: "Secret para webhooks Graf" })
+  @ApiPropertyOptional({ description: "Secret para webhooks Hermes" })
   @IsOptional()
   @IsString()
   webhookSecret?: string;
 
-  @ApiPropertyOptional({ description: "URL base del servicio Graf" })
+  @ApiPropertyOptional({ description: "URL base del servicio Hermes" })
   @IsOptional()
   @IsUrl()
   baseUrl?: string;
 }
 
-export class SinergiaCredentialsDto {
-  @ApiProperty({ description: "API Key para Sinergia POS" })
+export class TalantonCredentialsDto {
+  @ApiProperty({ description: "API Key para Talanton POS" })
   @IsString()
   @IsNotEmpty()
   @Length(10, 100)
@@ -96,14 +96,14 @@ export class SinergiaCredentialsDto {
   @IsNotEmpty()
   terminalId: string;
 
-  @ApiPropertyOptional({ description: "URL base del servicio Sinergia" })
+  @ApiPropertyOptional({ description: "URL base del servicio Talanton" })
   @IsOptional()
   @IsUrl()
   baseUrl?: string;
 }
 
-export class FiarCredentialsDto {
-  @ApiProperty({ description: "API Key para FIAR" })
+export class PistisCredentialsDto {
+  @ApiProperty({ description: "API Key para PISTIS" })
   @IsString()
   @IsNotEmpty()
   @Length(10, 100)
@@ -114,7 +114,7 @@ export class FiarCredentialsDto {
   @IsNotEmpty()
   merchantId: string;
 
-  @ApiPropertyOptional({ description: "URL base del servicio FIAR" })
+  @ApiPropertyOptional({ description: "URL base del servicio PISTIS" })
   @IsOptional()
   @IsUrl()
   baseUrl?: string;
@@ -128,33 +128,33 @@ export class ValidatedUpdatePluginDto {
   @ApiPropertyOptional({
     description: "Configuración específica según el tipo de plugin",
     oneOf: [
-      { $ref: "#/components/schemas/ApiSigoCredentialsDto" },
-      { $ref: "#/components/schemas/EmwCredentialsDto" },
-      { $ref: "#/components/schemas/MeraVueltaCredentialsDto" },
-      { $ref: "#/components/schemas/GrafCredentialsDto" },
-      { $ref: "#/components/schemas/SinergiaCredentialsDto" },
-      { $ref: "#/components/schemas/FiarCredentialsDto" },
+      { $ref: "#/components/schemas/LogosCredentialsDto" },
+      { $ref: "#/components/schemas/IrisCredentialsDto" },
+      { $ref: "#/components/schemas/TalariaCredentialsDto" },
+      { $ref: "#/components/schemas/HermesCredentialsDto" },
+      { $ref: "#/components/schemas/TalantonCredentialsDto" },
+      { $ref: "#/components/schemas/PistisCredentialsDto" },
     ],
   })
   @IsOptional()
   @IsObject()
   config?:
-    | ApiSigoCredentialsDto
-    | EmwCredentialsDto
-    | MeraVueltaCredentialsDto
-    | GrafCredentialsDto
-    | SinergiaCredentialsDto
-    | FiarCredentialsDto
+    | LogosCredentialsDto
+    | IrisCredentialsDto
+    | TalariaCredentialsDto
+    | HermesCredentialsDto
+    | TalantonCredentialsDto
+    | PistisCredentialsDto
     | Record<string, any>;
 }
 
 export const PLUGIN_VALIDATION_MAP = {
-  apisigo: ApiSigoCredentialsDto,
-  emw: EmwCredentialsDto,
-  meravuelta: MeraVueltaCredentialsDto,
-  graf: GrafCredentialsDto,
-  sinergia: SinergiaCredentialsDto,
-  fiar: FiarCredentialsDto,
+  logos: LogosCredentialsDto,
+  iris: IrisCredentialsDto,
+  talaria: TalariaCredentialsDto,
+  hermes: HermesCredentialsDto,
+  talanton: TalantonCredentialsDto,
+  pistis: PistisCredentialsDto,
 };
 
 export class SecurityValidation {

@@ -15,7 +15,7 @@ export class HealthController {
   }
 
   @Get("live")
-  @ApiOperation({ summary: "Liveness simple (Olympo contract)" })
+  @ApiOperation({ summary: "Liveness simple (Prizma contract)" })
   @ApiResponse({ status: 200, description: "{ status: 'healthy', service: 'hub' }" })
   getLiveness() {
     return { status: "healthy", service: "hub" };
